@@ -1,0 +1,630 @@
+external_components:
+  - source:
+      type: git
+      url: https://github.com/open-lcc/esphome-lcc-bianca-component
+# Uncomment if using Acaia
+#  - source:
+#      type: git
+#      url: https://github.com/open-lcc/esphome-acaia-component
+# Uncomment if using Pressensor
+#  - source:
+#      type: git
+#      url: https://github.com/open-lcc/esphome-pressensor-component
+  - source:
+      type: git
+      url: https://github.com/open-lcc/esphome-st7789v-fast
+# Adding the following component will make your firmware GPL Licensed
+#  - source:
+#      type: git
+#      url: https://github.com/open-lcc/esphome-stream-server
+
+esphome:
+  project:
+    name: open-lcc.bianca
+    version: 0.0.1
+  name: smart-lcc
+  name_add_mac_suffix: true
+  platformio_options:
+    build_flags:
+      - -O2
+    build_unflags:
+      - -Os
+      - -Werror=all
+    board_build.flash_mode: dio
+    board_upload.flash_size: 16MB
+    board_build.partitions: "../../../custom_partitions.csv"
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP_TLS_INSECURE: y
+      CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY: y
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+wifi:
+  id: wifi_component
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Uncomment if using Acaia or Pressensor, and replace with your MAC Addresses
+#ble_client:
+# Uncomment for Acaia
+#  - mac_address: 00:11:22:33:44:55
+#    id: acaia_client
+# Uncomment for Pressensor
+#  - mac_address: 66:77:88:99:AA:BB
+#    id: pressensor_id
+
+ota:
+  on_begin:
+    then:
+      - open_lcc.bianca.hard_bail: lcc_1
+      - delay: 3s
+
+uart:
+  baud_rate: 115200
+  tx_pin: GPIO17
+  rx_pin: GPIO18
+
+esp32_ble_tracker:
+
+
+# If using the Acaia integration, uncomment this
+
+#acaia:
+#  ble_client_id: acaia_client
+#  id: acaia_1
+
+
+# If using the Pressensor integration, uncomment this
+
+#pressensor:
+#  ble_client_id: pressensor_id
+
+# Stream server is GPL licensed. It's very useful, but if you uncomment this, your firmware becomes GPL licensed.
+
+#stream_server:
+#  buffer_size: 2048
+
+output:
+  - platform: gpio
+    pin:
+      number: GPIO4
+      mode:
+        output: true
+    id: rp2040_en
+  - platform: gpio
+    pin:
+      number: GPIO6
+      mode:
+        output: true
+    id: rp2040_serial_boot
+  - platform: gpio
+    pin:
+      number: GPIO5
+      mode:
+        output: true
+        open_drain: true
+    id: rp2040_bootsel
+
+switch:
+  - platform: output
+    id: rp2040_serial_boot_sw
+    name: "RP2040 Serial Boot"
+    output: 'rp2040_serial_boot'
+    restore_mode: ALWAYS_ON
+    internal: true
+  - platform: output
+    id: rp2040_bootsel_sw
+    name: "RP2040 Bootsel"
+    output: 'rp2040_bootsel'
+    restore_mode: ALWAYS_ON
+    internal: true
+  # Order matters here, enable needs to be after serial boot and bootsel
+  - platform: output
+    id: rp2040_en_sw
+    name: "RP2040 Enable"
+    output: 'rp2040_en'
+    restore_mode: ALWAYS_ON
+    internal: true
+  - platform: open_lcc_bianca
+    eco_mode:
+      id: eco_mode_sw
+      name: Eco Mode
+    sleep_mode:
+      id: sleep_mode_sw
+      name: Sleep Mode
+    low_flow_mode:
+      id: low_flow_sw
+      name: Low Flow
+
+# Uncomment if using Pressensor
+#  - platform: ble_client
+#    ble_client_id: pressensor_id
+#    name: "Enable Pressensor"
+
+open_lcc_bianca:
+  id: lcc_1
+
+logger:
+  level: DEBUG
+
+text_sensor:
+  - platform: open_lcc_bianca
+    status:
+      id: status
+      name: LCC Status
+#  - platform: ble_scanner
+#    name: "BLE Devices Scanner"
+
+binary_sensor:
+  - platform: template
+    name: "Template Currently Brewing"
+    internal: true
+    id: templ_brewing
+    on_press:
+# Uncomment if using Acaia
+#      - if:
+#          condition:
+#            binary_sensor.is_on: acaia_connected
+#          then:
+#            - acaia.tare: acaia_1
+#            - acaia.reset_timer: acaia_1
+#            - acaia.start_timer: acaia_1
+      - display.page.show: page_brewing_sensors
+    on_release:
+# Uncomment if using Acaia
+#      - if:
+#          condition:
+#            binary_sensor.is_on: acaia_connected
+#          then:
+#            - acaia.stop_timer: acaia_1
+      - delay: 3s
+      - display.page.show: page_idle
+  - platform: open_lcc_bianca
+    brewing:
+      name: Currently Brewing
+      id: brewing
+      internal: true
+      on_state:
+        - binary_sensor.template.publish:
+            id: templ_brewing
+            state: !lambda 'return x;'
+    filling_service_boiler:
+      name: Filling Service Boiler
+      id: filling_service_boiler_sens
+      internal: true
+    water_tank_low:
+      name: Water Tank Low
+      id: water_low_sens
+      internal: true
+    brew_boiler_heating:
+      name: Brew Boiler Heating
+      id: brew_boiler_on
+      internal: true
+    service_boiler_heating:
+      name: Service Boiler Heating
+      id: service_boiler_on
+      internal: true
+# Uncomment if using Pressensor
+#  - platform: pressensor
+#    connected:
+#      name: Pressensor Connected
+#      id: pressensor_connected
+#      internal: true
+# Uncomment if using Acaia
+#  - platform: acaia
+#    connected:
+#      name: Acaia Connected
+#      id: acaia_connected
+#      internal: true
+# Uncomment if using Stream server
+#  - platform: stream_server
+#    connected:
+#      name: UART Bridge connected
+#      internal: true
+#      on_press:
+#        then:
+#          - open_lcc.bianca.disable: lcc_1
+#      on_release:
+#        then:
+#          - open_lcc.bianca.enable: lcc_1
+  - platform: gpio
+    pin:
+      number: GPIO38
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    on_press:
+      then:
+        - number.increment: coffee_set_point
+    internal: true
+    name: "Plus button"
+  - platform: gpio
+    pin:
+      number: GPIO21
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    on_press:
+      then:
+        - number.decrement: coffee_set_point
+    internal: true
+    name: "Minus button"
+
+button:
+  - platform: template
+    name: "Reboot RP2040 to BOOTSEL"
+    on_press:
+      - open_lcc.bianca.hard_bail: lcc_1
+      - delay: 3s
+      - switch.turn_off: rp2040_en_sw
+      - delay: 500ms
+      - switch.turn_off: rp2040_bootsel_sw
+      - delay: 1s
+      - switch.turn_on: rp2040_en_sw
+      - delay: 2s
+      - switch.turn_on: rp2040_bootsel_sw
+    entity_category: "diagnostic"
+  - platform: template
+    name: "Reboot RP2040 to Serial Boot"
+    on_press:
+      - open_lcc.bianca.hard_bail: lcc_1
+      - delay: 3s
+      - switch.turn_off: rp2040_en_sw
+      - delay: 500ms
+      - switch.turn_off: rp2040_serial_boot_sw
+      - delay: 1s
+      - switch.turn_on: rp2040_en_sw
+      - delay: 2s
+      - switch.turn_on: rp2040_serial_boot_sw
+    entity_category: "diagnostic"
+  - platform: template
+    name: "Enqueue Routine"
+    on_press:
+      - open_lcc.bianca.enqueue_routine: lcc_1
+
+number:
+  - platform: open_lcc_bianca
+    coffee_boiler_temperature_offset:
+      id: bbto
+      name: Coffee Boiler Temperature Offset
+      mode: box
+      entity_category: "config"
+    auto_sleep_after:
+      id: asa
+      name: Auto Sleep After
+      mode: box
+      entity_category: "config"
+    coffee_boiler_temperature_set_point:
+      id: coffee_set_point
+      name: Coffee boiler set point
+      mode: box
+    service_boiler_temperature_set_point:
+      id: service_set_point
+      name: Service boiler set point
+      mode: box
+
+sensor:
+  - platform: open_lcc_bianca
+    coffee_boiler_temperature:
+      name: Coffee Boiler Temperature
+      id: coffee_boiler_sens
+    service_boiler_temperature:
+      name: Service Boiler Temperature
+      id: service_boiler_sens
+    external_temperature_1:
+      name: E61 Outlet Temperature
+      id: outlet_temp_sens
+    external_temperature_2:
+      name: E61 Inlet Temperature
+      id: inlet_temp_sens
+    auto_sleep_in:
+      name: Auto-sleep in
+      unit_of_measurement: "min"
+      accuracy_decimals: 0
+      filters:
+        - lambda: return x / 60;
+        - or:
+            - throttle: 60s
+            - delta: 0.45
+    current_routine:
+      name: Currently Loaded Routine ID
+    current_routine_step:
+      name: Current Routine Step
+    rp2040_uptime:
+      id: rp2040_up
+      name: RP2040 Uptime
+      unit_of_measurement: "min"
+      accuracy_decimals: 0
+      entity_category: "diagnostic"
+      filters:
+        - lambda: return x / 60;
+        - or:
+            - throttle: 60s
+            - delta: 0.45
+    brew_time:
+      name: Brew time
+      id: brew_time
+# Uncomment if using Acaia
+#  - platform: acaia
+#    weight:
+#      id: scale_sens
+#      name: Scale weight
+#      accuracy_decimals: 1
+#      unit_of_measurement: g
+#      filters:
+#        - lambda: return x * 1000;
+#    flow:
+#      name: Scale flow
+#      id: flow_sens
+# Uncomment if using Pressensor
+#  - platform: pressensor
+#    pressure:
+#      id: pressure_sens
+#      name: Group Pressure
+#      accuracy_decimals: 1
+#      unit_of_measurement: bar
+#      filters:
+#        - lambda: return x / 100000;
+#    battery_level:
+#      name: Pressensor Battery Level
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+  - platform: uptime
+    id: esp32_up
+    name: "ESP32 Uptime"
+    unit_of_measurement: "min"
+    accuracy_decimals: 0
+    filters:
+      - lambda: return x / 60;
+      - or:
+          - throttle: 60s
+          - delta: 0.45
+    entity_category: "diagnostic"
+
+# Enable Home Assistant API
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: !secret api_key
+
+captive_portal:
+
+web_server:
+  port: 80
+  ota: false # Not available in IDF
+  log: false
+  include_internal: true
+
+spi:
+  clk_pin: GPIO12
+  mosi_pin: GPIO11
+  interface: hardware
+
+i2c:
+  sda: 2
+  scl: 1
+  scan: true
+  id: qwiic_3
+
+color:
+  - id: my_red
+    red: 100%
+    green: 0%
+    blue: 0%
+  - id: my_yellow
+    red: 100%
+    green: 100%
+    blue: 0%
+  - id: my_green
+    red: 0%
+    green: 100%
+    blue: 0%
+  - id: my_blue
+    red: 0%
+    green: 0%
+    blue: 100%
+  - id: dark_gray
+    red: 20%
+    green: 20%
+    blue: 20%
+  - id: my_gray
+    red: 50%
+    green: 50%
+    blue: 50%
+  - id: white
+    red: 100%
+    green: 100%
+    blue: 100%
+  - id: black
+    red: 0%
+    green: 0%
+    blue: 0%
+font:
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 900
+    id: font12
+    size: 24
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 900
+    id: font36
+    size: 48
+  - file: "9x15.bdf"
+    id: font2
+  - file: "5x7.bdf"
+    id: font1
+
+image:
+  - file: "xbm/pump_on_2x.h"
+    id: pump_on
+  - file: "xbm/no_water_2x.h"
+    id: no_water
+  - file: "xbm/eco_mode_2x.h"
+    id: eco_mode
+  - file: "xbm/bssr_on_2x.h"
+    id: bssr_on
+  - file: "xbm/sssr_on_2x.h"
+    id: sssr_on
+
+# Uncomment if using Acaia or Pressensor
+
+#graph:
+#  # Show multi-trace graph
+#  - id: brew_graph
+#    duration: 1 min
+#    x_grid: 10 s
+#    y_grid: 2     # degC/div
+#    width: 250
+#    height: 100
+#    max_value: 10
+#    min_value: 0
+#    traces:
+#      - sensor: flow_sens
+#        line_type: SOLID
+#        line_thickness: 3
+#        color: my_red
+#      - sensor: pressure_sens
+#        line_type: SOLID
+#        line_thickness: 3
+#        color: my_green
+
+# ST7789V
+
+display:
+  - platform: st7789v_fast
+    model: Custom
+    width: 172
+    height: 320
+    offset_height: 34
+    offset_width: 0
+    cs_pin: GPIO10
+    dc_pin: GPIO9
+    reset_pin: GPIO8
+    backlight_pin: GPIO47
+    rotation: 90°
+    update_interval: 500ms
+    pages:
+      - id: page_idle
+        lambda: |-
+          Color textColor = id(white);
+          if (id(sleep_mode_sw).state) {
+            textColor = id(my_gray);
+          }
+          
+          if (id(eco_mode_sw).state) {
+            it.printf(115, 36, id(font36), textColor, TextAlign::TOP_LEFT, "%.1f", id(coffee_boiler_sens).state);
+            it.line(110, 90, 110 + 110, 90, textColor);
+            it.printf(120, 120, id(font12), textColor, TextAlign::BOTTOM_LEFT, "%.1f °C", id(coffee_set_point).state);
+          } else {
+            it.printf(55, 36, id(font36), textColor, TextAlign::TOP_LEFT, "%.1f", id(coffee_boiler_sens).state);
+            it.line(50, 90, 155, 90, textColor);
+            it.printf(60, 120, id(font12), textColor, TextAlign::BOTTOM_LEFT, "%.1f °C", id(coffee_set_point).state);
+      
+            it.printf(255, 36, id(font36), textColor, TextAlign::TOP_RIGHT, "%.0f", id(service_boiler_sens).state);
+            it.line(175, 90, 260, 90, textColor);
+            it.printf(250, 120, id(font12), textColor, TextAlign::BOTTOM_RIGHT, "%.0f °C", id(service_set_point).state);
+          }
+
+          // Uncomment if using Acaia
+          
+          // if (id(acaia_connected).state) {
+          //   it.printf(55, 150, id(font12), id(my_gray), TextAlign::BOTTOM_LEFT, "%.1f g", id(scale_sens).state);
+          // }
+
+          // Uncomment if using Pressensor
+          
+          // if (id(pressensor_connected).state) {
+          //   it.printf(250, 150, id(font12), id(my_gray), TextAlign::BOTTOM_RIGHT, "%.1f bar", id(pressure_sens).state);
+          // }
+    
+          it.image(285, 45, id(eco_mode), ImageAlign::TOP_RIGHT, id(black), id(eco_mode_sw).state ? id(white) : id(dark_gray));
+          it.image(288, 65, id(pump_on), ImageAlign::TOP_RIGHT, id(black), id(filling_service_boiler_sens).state ? id(white) : id(dark_gray));
+          it.image(285, 85, id(no_water), ImageAlign::TOP_RIGHT, id(black), id(water_low_sens).state ? id(white) : id(dark_gray));
+    
+          if (id(brew_boiler_on).state) {
+            it.image(285, 130, id(bssr_on), ImageAlign::TOP_RIGHT, id(black), id(white));
+          } else if (id(service_boiler_on).state) {
+            it.image(285, 130, id(sssr_on), ImageAlign::TOP_RIGHT, id(black), id(white));
+          }
+    
+          Color signal;
+          if (id(wifi_signal_db).state >= -60) {
+            signal = id(my_green);
+          } else if (id(wifi_signal_db).state >= -67) {
+            signal = id(my_yellow);
+          } else {
+            signal = id(my_red);
+          }
+    
+          it.printf(285, 24, id(font2), signal, TextAlign::TOP_RIGHT, "%.0f", id(wifi_signal_db).state);
+      - id: page_brewing_sensors
+        lambda: |-
+          // Comment the next line, and uncomment the other two if using Acaia and Pressensor
+          it.printf(40, 125, id(font12), "%.0f s", id(brew_time).state);
+          // it.graph(36, 20, id(brew_graph));
+          // it.printf(40, 125, id(font12), "%.0f s, %.1f bar, %.1f g/s", id(brew_time).state, id(pressure_sens).state, id(flow_sens).state);
+
+# SSD1306
+
+#color:
+#  - id: white
+#    red: 100%
+#    green: 100%
+#    blue: 100%
+#  - id: black
+#    red: 0%
+#    green: 0%
+#    blue: 0%
+#
+#display:
+#  - platform: ssd1306_spi
+#    update_interval: 0.5s
+#    model: "SSD1306 128x64"
+#    cs_pin: GPIO10
+#    dc_pin: GPIO9
+#    reset_pin: GPIO8
+#    rotation: 180°
+#    lambda: |-
+#      it.printf(16, 16, id(font1), "%s", id(status).state.c_str());
+#      it.printf(16, 24, id(font1), "Brew: %.1f (%.1f)", id(coffee_boiler_sens).state, id(coffee_set_point).state);
+#      if (id(eco_mode_sw).state) {
+#        it.print(16, 32, id(font1), "Eco mode");
+#      } else {
+#        it.printf(16, 32, id(font1), "Serv: %.1f (%.1f)", id(service_boiler_sens).state, id(service_set_point).state);
+#      }
+#      if (id(brewing).state) {
+#        it.printf(16, 40, id(font1), "Brewing, %.0f s", id(brew_time).state);
+#      }
+#      it.printf(16, 48, id(font1), "Prs: %.1f bar", id(pressure_sens).state);
+#      it.printf(16, 56, id(font1), "Wei: %.1f g", id(scale_sens).state);
+#
+#
+#      it.printf(90, 16, id(font1), "%.0f", id(wifi_signal_db).state);
+#
+#      if (id(filling_service).state) {
+#        it.image(90, 26, id(pump_on), id(black), id(white));
+#      }
+#      if (id(water_low).state) {
+#        it.image(90, 36, id(no_water), id(black), id(white));
+#      }
+#
+#      if (id(brew_boiler_on).state) {
+#        it.print(90, 46, id(font1), "B");
+#      } else if (id(service_boiler_on).state) {
+#        it.print(90, 46, id(font1), "S");
+#      }
