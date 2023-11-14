@@ -29,7 +29,7 @@ The Open LCC hardware has QWIIC interfaces to allow for extension. Specifically,
 
 ## Building
 
-The project is built using the regular ESPHome build chain. 
+The project is built using the regular ESPHome build chain. It includes options to upload firmware both over USB and over Wi-fi.
 
 ## Licensing
 
